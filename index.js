@@ -1,9 +1,10 @@
 require('dotenv').config();
 const express = require('express');
-const request = require('request-promise-native');
+const axios = require('axios');
+const querystring = require('querystring');
 const NodeCache = require('node-cache');
 const session = require('express-session');
-const opn = require('open');
+
 const app = express();
 
 const PORT = 3000;
@@ -119,15 +120,13 @@ app.get('/oauth-callback', async (req, res) => {
 
 const exchangeForTokens = async (userId, exchangeProof) => {
   try {
-    const responseBody = await request.post(
+    const responseBody = await axios.post(
       'https://api.hubapi.com/oauth/v1/token',
-      {
-        form: exchangeProof,
-      },
+      querystring.stringify(exchangeProof),
     );
     // Usually, this token data should be persisted in a database and associated with
     // a user identity.
-    const tokens = JSON.parse(responseBody);
+    const tokens = responseBody.data;
     refreshTokenStore[userId] = tokens.refresh_token;
     accessTokenCache.set(
       userId,
@@ -138,10 +137,11 @@ const exchangeForTokens = async (userId, exchangeProof) => {
     console.log('       > Received an access token and refresh token');
     return tokens.access_token;
   } catch (e) {
+    console.error(e);
     console.error(
       `       > Error exchanging ${exchangeProof.grant_type} for access token`,
     );
-    return JSON.parse(e.response.body);
+    return e.response.data;
   }
 };
 
@@ -185,22 +185,20 @@ const getContact = async accessToken => {
       'Content-Type': 'application/json',
     };
     console.log(
-      '===> Replace the following request.get() to test other API calls',
+      '===> Replace the following axios.get() to test other API calls',
     );
     console.log(
-      "===> request.get('https://api.hubapi.com/contacts/v1/lists/all/contacts/all?count=1')",
+      "===> axios.get('https://api.hubapi.com/contacts/v1/lists/all/contacts/all?count=1')",
     );
-    const result = await request.get(
+    const result = await axios.get(
       'https://api.hubapi.com/contacts/v1/lists/all/contacts/all?count=1',
-      {
-        headers: headers,
-      },
+      { headers },
     );
 
-    return JSON.parse(result).contacts[0];
+    return result.data.contacts[0];
   } catch (e) {
     console.error('  > Unable to retrieve contact');
-    return JSON.parse(e.response.body);
+    return e.response.data;
   }
 };
 
@@ -242,4 +240,3 @@ app.get('/error', (req, res) => {
 app.listen(PORT, () =>
   console.log(`=== Starting your app on http://localhost:${PORT} ===`),
 );
-opn(`http://localhost:${PORT}`);
